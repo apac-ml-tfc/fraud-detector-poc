@@ -1,0 +1,102 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >-
+  Create IAM Policies and SageMaker Notebook to work with Amazon Fraud Detector. This template will also
+  clone the PoC codebase into the notebook to help you get started.
+
+Parameters:
+  NotebookName:
+    Type: String
+    Default: FraudDetectorPoCNotebook
+    Description: Enter the name of the SageMaker Notebook instance. Default is FraudDetectorPoCNotebook.
+
+  VolumeSize:
+    Type: Number
+    Default: 10
+    MinValue: 5
+    MaxValue: 16384
+    ConstraintDescription: Must be an integer between 5 (GB) and 16384 (16 TB).
+    Description: Enter the size of the EBS volume in GB.
+
+  UseVPC:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+
+  SecurityGroup:
+    # Use String rather than AWS::EC2::SecurityGroup::Id to allow for empty values
+    Type: String
+    Default: ''
+    Description: The security group to provide the notebook access within the VPC
+
+  PrivateSubnet:
+    # Use String rather than AWS::EC2::Subnet::Id to allow for empty values
+    Type: String
+    Default: ''
+    Description: The ID of the subnet in a VPC to which you would like to have a connectivity from your ML compute instance
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      UseVPC:
+        default: Use (existing) VPC?
+      SecurityGroup:
+        default: Security Group ID
+      PrivateSubnet:
+        default: Private Subnet ID
+      NotebookName:
+        default: Notebook Name
+      VolumeSize:
+        default: EBS (Notebook Hard Disk) Volume Size
+
+    ParameterGroups:
+      - Label:
+          default: Basic Configuration
+        Parameters:
+          - NotebookName
+          - VolumeSize
+          - UseVPC
+      - Label:
+          default: VPC Settings (Required if UseVPC is 'yes')
+        Parameters:
+          - SecurityGroup
+          - PrivateSubnet
+
+Conditions:
+  UseOwnVPC: !Equals [!Ref UseVPC, 'yes']
+
+Resources:
+  # SageMaker Execution Role
+  SageMakerIamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Path: '/'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonFraudDetectorFullAccessPolicy'
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/IAMFullAccess'
+
+  # SageMaker Notebook
+  NotebookInstance:
+    Type: 'AWS::SageMaker::NotebookInstance'
+    Properties:
+      InstanceType: 'ml.t3.medium'
+      NotebookInstanceName: !Ref NotebookName
+      RoleArn: !GetAtt SageMakerIamRole.Arn
+      VolumeSizeInGB: !Ref VolumeSize
+      DefaultCodeRepository: https://github.com/apac-ml-tfc/fraud-detector-poc.git
+      SecurityGroupIds:
+        - !If [ UseOwnVPC, !Ref SecurityGroup, !Ref 'AWS::NoValue']
+      SubnetId: !If [ UseOwnVPC, !Ref PrivateSubnet, !Ref 'AWS::NoValue']

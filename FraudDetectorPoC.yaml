@@ -79,6 +79,11 @@ Resources:
           -
             Effect: Allow
             Principal:
+              Service: frauddetector.amazonaws.com
+            Action: sts:AssumeRole
+          -
+            Effect: Allow
+            Principal:
               Service: sagemaker.amazonaws.com
             Action: sts:AssumeRole
       Path: '/'
